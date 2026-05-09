@@ -11,7 +11,7 @@ saveRDS(data, "input/hannum.rds")
 
 # Process clock_horvath {}
 
-data <- read.csv("data/13059_2013_3156_MOESM3_ESM.csv", skip = 2)
+data <- read.csv("data/13059_2013_3156_MOESM3_ESM.csv", skip = 2)[-1, ]
 data <- data[, c(1,2)]
 colnames(data) <- c("cpg", "coef")
 
