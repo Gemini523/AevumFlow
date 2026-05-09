@@ -1,25 +1,32 @@
-run_analysis <- function(coefs, ewas, selected_traits = NULL) {
+run_analysis <- function(clock, ewas, selected_traits = NULL) {
 
-	if (!is.null(selected_traits)) {
-	    ewas_db <- ewas_db[ewas_db$trait %in% selected_traits, ]
-	  }
+  # Traits filtras
+  if (!is.null(selected_traits) && length(selected_traits) > 0) {
+    ewas <- ewas[ewas$trait %in% selected_traits, ]
+  }
 
-	merged <- merge(user_cpgs_df, ewas_db, by = "cpg_id")
-	  
-	if (nrow(merged) == 0) {
-	  return(list(error = "Nė vienas CpG nepersiklojo su EWAS duomenimis"))
-	}
+  # Skaičiavimas pagal kiekvieną trait+pmid kombinaciją
+  groups <- split(ewas, list(ewas$trait, ewas$pmid), drop = TRUE)
 
-	results <- do.call(rbind, lapply(split(merged, merged$trait), function(df) {
-	    data.frame(
-	      trait        = df$trait[1],
-	      n_overlap    = nrow(df),            # kiek CpG persiklojo
-	      pct_overlap  = nrow(df) / nrow(user_cpgs_df) * 100,
-	      weighted_r   = sum(df$coefficient * df$effect_size, na.rm = TRUE)
-	    )
-	  }))
-	  
-	  results[order(-abs(results$weighted_r)), ]
+  results <- do.call(rbind, lapply(groups, function(study) {
 
-	  
+    common <- merge(clock, study, by = "cpg")
+
+    if (nrow(common) == 0) return(NULL)
+
+    data.frame(
+      trait        = study$trait[1],
+      pmid         = study$pmid[1],
+      n_clock      = nrow(clock),
+      n_study      = nrow(study),
+      n_overlap    = nrow(common),
+      pct_overlap  = round(nrow(common) / nrow(clock) * 100, 1),
+      score        = round(sum(common$beta * common$coef, na.rm = TRUE), 6)
+    )
+  }))
+
+  if (is.null(results)) return(data.frame(error = "Nėra persiklojančių CpG"))
+
+  rownames(results) <- NULL
+  results[order(-abs(results$score)), ]
 }
