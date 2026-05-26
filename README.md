@@ -1,4 +1,4 @@
-# Epigenetinių laikrodžių EWAS analizės įrankis
+# Epigenetinių laikrodžių ir EWAS analizės įrankis
 
 Tai R Shiny pagrindu sukurta interaktyvi web aplikacija, leidžianti analizuoti **EWAS** (epigenome-wide association studies) duomenų sąveiką su **epigenetiniais amžiaus laikrodžiais**. Vartotojai gali pasirinkti laikrodžius, filtruoti bruožus, vykdyti analizę ir vizualizuoti rezultatus keliomis formomis — įskaitant karščio žemėlapius, dendrogramas ir taškų diagramas.
 
