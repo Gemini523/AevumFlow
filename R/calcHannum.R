@@ -1,5 +1,0 @@
-
-
-calcHannum <- function() {
-	
-}

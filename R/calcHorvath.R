@@ -1,5 +1,0 @@
-
-
-calcHorvath <- function() {
-	
-}
