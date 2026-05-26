@@ -12,12 +12,12 @@ Tai R Shiny pagrindu sukurta interaktyvi web aplikacija, leidžianti analizuoti 
 
 ## Pagrindinės funkcijos
  
-- **EWAS analizė:** skaičiuoja epigenetinių laikrodžių CpG persidengimą su EWAS rezultatais ir įvertina amžiaus poslinkį (score) kiekvienam bruožui;
+- **EWAS analizė:** skaičiuoja epigenetinių laikrodžių CpG persidengimą su EWAS rezultatais ir įvertina amžiaus poslinkį (score) kiekvienam veiksniui;
 - **Jaccard indeksas:** vizualizuoja EWAS studijų ir laikrodžių CpG rinkinių persidengimą burbulinėje diagramoje;
-- **Šilumos žemėlapiai:** rodo amžiaus poslinkius pagal bruožą ir laikrodį — globaliai arba pagal kategorijas (senėjimas, svoris, širdies ligos ir kt.);
+- **Šilumos žemėlapiai:** rodo amžiaus poslinkius pagal veiksnį ir laikrodį — globaliai arba pagal kategorijas (senėjimas, svoris, širdies ligos ir kt.);
 - **Dendrogramos:** klasterizuoja laikrodžius ir EWAS studijas pagal Pearson koreliaciją;
-- **Grupuota taškų diagrama:** vizualizuoja kiekvieno bruožo amžiaus poslinkį pagal pasirinktus laikrodžius, sugrupuotą pagal EWAS kategorijas;
-- **Pasirinktiniai duomenys:** leidžia įkelti savo EWAS duomenis (CSV/XLSX) ir savus laikrodžius su CpG koeficientais;
+- **Grupuota taškų diagrama:** vizualizuoja kiekvieno veiksnio amžiaus poslinkį pagal pasirinktus laikrodžius, sugrupuotą pagal EWAS kategorijas;
+- **Pasirinktiniai duomenys:** leidžia įkelti savo EWAS duomenis ir savus laikrodžius su CpG koeficientais (CSV/XLSX);
 - **Atsisiuntimai:** rezultatus galima atsisiųsti CSV formatu, o visas vizualizacijas — PDF formatu.
 
 ## Reikalavimai
@@ -87,7 +87,7 @@ EWAS failai (CSV arba XLSX) turi turėti šiuos stulpelius:
 | Stulpelis     | Aprašymas                        |
 |---------------|----------------------------------|
 | `cpg`         | CpG identifikatorius (pvz., cg00001234) |
-| `trait`       | EWAS bruožas (pvz., „smoking")   |
+| `trait`       | EWAS veiksnys (pvz., „smoking")   |
 | `pmid`        | PubMed ID                        |
 | `beta`        | Regresijos koeficientas          |
 | `sample_size` | Imties dydis                     |
