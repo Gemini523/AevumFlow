@@ -12,7 +12,7 @@ local({
 })
 
 
-ewas_preview <- readRDS("../data/ewas_all.rds")
+ewas_preview <- readRDS("data/ewas_all.rds")
 all_traits   <- sort(unique(ewas_preview$trait))
 
 all_clocks <- c(

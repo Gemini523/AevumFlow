@@ -6,49 +6,49 @@ library(DT)
 library(pheatmap)
 library(openxlsx)
 library(ape)
-source("calculations.R")
-source("ui.R")
+source("R/calculations.R")
+source("R/ui.R")
 
-JACCARD_WHITELIST <- readRDS("../data/jaccard_whitelist.rds")
+JACCARD_WHITELIST <- readRDS("data/jaccard_whitelist.rds")
 
 EWAS_SOURCES <- list(
-  atlas   = readRDS("../data/ewas_atlas.rds"),
-  catalog = readRDS("../data/ewas_catalog.rds"),
-  custom  = readRDS("../data/ewas_custom.rds"),
-  all     = readRDS("../data/ewas_all.rds")
+  atlas   = readRDS("data/ewas_atlas.rds"),
+  catalog = readRDS("data/ewas_catalog.rds"),
+  custom  = readRDS("data/ewas_custom.rds"),
+  all     = readRDS("data/ewas_all.rds")
 )
 
 EWAS_FULL <- list(
-  atlas   = readRDS("../data/ewas_atlas_full.rds"),
-  catalog = readRDS("../data/ewas_catalog_full.rds"),
-  custom  = readRDS("../data/ewas_custom_full.rds"),
-  all     = readRDS("../data/ewas_all_full.rds")
+  atlas   = readRDS("data/ewas_atlas_full.rds"),
+  catalog = readRDS("data/ewas_catalog_full.rds"),
+  custom  = readRDS("data/ewas_custom_full.rds"),
+  all     = readRDS("data/ewas_all_full.rds")
 )
 
 CLOCKS <- list(
-  adaptage        = readRDS("../input/adaptage.rds"),
-  causage         = readRDS("../input/causage.rds"),
-  damage          = readRDS("../input/damage.rds"),
-  hannum          = readRDS("../input/hannum.rds"),
-  horvath         = readRDS("../input/horvath.rds"),
-  intrinclock     = readRDS("../input/intrinclock.rds"),
-  icage           = readRDS("../input/icage.rds"),
-  phenoage        = readRDS("../input/phenoage.rds"),
-  retroelementV1  = readRDS("../input/retroelementV1.rds"),
-  retroelementV2  = readRDS("../input/retroelementV2.rds"),
-  skinandblood    = readRDS("../input/skinandblood.rds"),
-  epitoc          = readRDS("../input/epitoc.rds"),
-  epitoc2         = readRDS("../input/epitoc2.rds"),
-  miage           = readRDS("../input/miage.rds")
+  adaptage        = readRDS("input/adaptage.rds"),
+  causage         = readRDS("input/causage.rds"),
+  damage          = readRDS("input/damage.rds"),
+  hannum          = readRDS("input/hannum.rds"),
+  horvath         = readRDS("input/horvath.rds"),
+  intrinclock     = readRDS("input/intrinclock.rds"),
+  icage           = readRDS("input/icage.rds"),
+  phenoage        = readRDS("input/phenoage.rds"),
+  retroelementV1  = readRDS("input/retroelementV1.rds"),
+  retroelementV2  = readRDS("input/retroelementV2.rds"),
+  skinandblood    = readRDS("input/skinandblood.rds"),
+  epitoc          = readRDS("input/epitoc.rds"),
+  epitoc2         = readRDS("input/epitoc2.rds"),
+  miage           = readRDS("input/miage.rds")
 )
 
 CLOCKS_PC <- list(
-  pc_dnamtl       = readRDS("../input/pc_dnamtl.rds"),
-  pc_grimage      = readRDS("../input/pc_grimage.rds"),
-  pc_hannum       = readRDS("../input/pc_hannum.rds"),
-  pc_horvath      = readRDS("../input/pc_horvath.rds"),
-  pc_phenoage     = readRDS("../input/pc_phenoage.rds"),
-  pc_skinandblood = readRDS("../input/pc_skinandblood.rds")
+  pc_dnamtl       = readRDS("input/pc_dnamtl.rds"),
+  pc_grimage      = readRDS("input/pc_grimage.rds"),
+  pc_hannum       = readRDS("input/pc_hannum.rds"),
+  pc_horvath      = readRDS("input/pc_horvath.rds"),
+  pc_phenoage     = readRDS("input/pc_phenoage.rds"),
+  pc_skinandblood = readRDS("input/pc_skinandblood.rds")
 )
 
 CLOCK_COLORS <- c(
@@ -951,3 +951,5 @@ server <- function(input, output, session) {
     }
   )
 }
+
+shinyApp(ui = ui, server = server)
