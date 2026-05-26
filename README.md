@@ -89,7 +89,7 @@ EWAS failai (CSV arba XLSX) turi turėti šiuos stulpelius:
 | `cpg`         | CpG identifikatorius (pvz., cg00001234) |
 | `trait`       | EWAS veiksnys (pvz., „smoking")   |
 | `pmid`        | PubMed ID                        |
-| `beta`        | Regresijos koeficientas          |
+| `beta`        | Regresijos koeficientas (Δβ tarp grupių)|
 | `sample_size` | Imties dydis                     |
  
 ### Pasirinktiniai laikrodžiai
