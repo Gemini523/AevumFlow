@@ -92,7 +92,7 @@ ui <- fluidPage(
 * { box-sizing: border-box; }
 body {
   font-family: 'Inter', system-ui, sans-serif;
-  font-size: 14px;
+  font-size: 16px;
   background: var(--bg);
   color: var(--text);
   margin: 0;
@@ -107,8 +107,8 @@ body {
   align-items: baseline;
   gap: 10px;
 }
-.aev-logo    { font-size: 1.1rem; font-weight: 700; color: var(--text); }
-.aev-tagline { font-size: 0.8rem; color: var(--muted); }
+.aev-logo    { font-size: 2.2rem; font-weight: 700; color: var(--text); }
+.aev-tagline { font-size: 1.4rem; color: var(--muted); }
 .shiny-title-panel, h2.shiny-title-panel { display: none !important; }
 
 /* ── Sidebar ── */
@@ -137,7 +137,7 @@ body {
 .aev-sec-hdr.aev-open     { background: var(--blue-lt); border-color: #bfdbfe;
                              border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
 .aev-sec-title {
-  font-size: 0.9rem;
+  font-size: 1.3rem;
   font-weight: 700;
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -159,7 +159,7 @@ body {
 
 /* ── Column labels inside clocks ── */
 .aev-col-label {
-  font-size: 0.72rem;
+  font-size: 0.84rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -171,7 +171,7 @@ body {
 /* ── Checkboxes tighter ── */
 .shiny-input-container .checkbox { margin: 0 !important; padding: 0 !important; }
 .shiny-input-container .checkbox label {
-  font-size: 0.83rem;
+  font-size: 1.0rem;
   line-height: 1.6;
   display: flex;
   align-items: center;
@@ -184,7 +184,9 @@ body {
   top: 0 !important;
   flex-shrink: 0;
 }
-.shiny-input-container > label { font-size: 0.78rem; font-weight: 700; color: var(--muted); margin-bottom: 12px; margin-top: 8px; display: block; text-transform: uppercase; letter-spacing: 0.04em; }
+.shiny-input-container > label { font-size: 1.0rem; font-weight: 700; color: var(--muted); margin-bottom: 12px; margin-top: 8px; display: block; text-transform: uppercase; letter-spacing: 0.04em; }
+.shiny-input-container.shiny-input-container-inline > label,
+.shiny-input-container:has(input[type=file]) > label { text-transform: none; letter-spacing: normal; }
 
 /* ── Small buttons ── */
 .aev-btn-sm {
@@ -192,7 +194,7 @@ body {
   border: 1px solid var(--border) !important;
   border-radius: 5px !important;
   padding: 4px 11px !important;
-  font-size: 0.76rem !important;
+  font-size: 1.0rem !important;
   font-weight: 500 !important;
   color: var(--muted) !important;
   cursor: pointer;
@@ -212,7 +214,7 @@ body {
   border: none !important;
   border-radius: var(--r) !important;
   padding: 9px 0 !important;
-  font-size: 0.88rem !important;
+  font-size: 1.0rem !important;
   font-weight: 600 !important;
   cursor: pointer;
   letter-spacing: 0.02em;
@@ -256,7 +258,7 @@ body {
   border-bottom: 2px solid transparent !important;
   border-radius: 0 !important;
   padding: 10px 15px 8px !important;
-  font-size: 0.85rem !important;
+  font-size: 1.2rem !important;
   font-weight: 500 !important;
   color: var(--muted) !important;
   background: transparent !important;
@@ -275,7 +277,7 @@ body {
 /* ── Inner tabs (heatmap categories, dendrograms) ── */
 .aev-inner-tabs .nav.nav-tabs { background: #fafbfc; }
 .aev-inner-tabs .nav.nav-tabs > li > a {
-  font-size: 0.78rem !important;
+  font-size: 1.1rem !important;
   padding: 6px 11px 5px !important;
   color: #94a3b8 !important;
 }
@@ -300,7 +302,7 @@ body {
   border: 1px solid var(--border) !important;
   border-radius: 5px !important;
   padding: 4px 12px !important;
-  font-size: 0.77rem !important;
+  font-size: 0.89rem !important;
   font-weight: 500 !important;
   color: var(--muted) !important;
   text-decoration: none !important;
@@ -325,7 +327,7 @@ body {
   display: flex !important;
   align-items: center !important;
   gap: 6px !important;
-  font-size: 0.83rem;
+  font-size: 1.0rem;
   line-height: 1.6;
   min-height: 0 !important;
 }
@@ -344,12 +346,12 @@ body {
 .irs--shiny .irs-handle { border-color: var(--blue); }
 
 /* ── Selectize (Veiksniai dropdown) ── */
-.selectize-input { font-size: 0.83rem !important; min-height: 30px !important; }
-.selectize-dropdown { font-size: 0.83rem !important; }
-.selectize-input .item { font-size: 0.81rem !important; }
+.selectize-input { font-size: 0.93rem !important; min-height: 30px !important; }
+.selectize-dropdown { font-size: 0.93rem !important; }
+.selectize-input .item { font-size: 0.91rem !important; }
 
 /* ── DT table ── */
-.dataTables_wrapper { font-size: 0.88rem; }
+.dataTables_wrapper { font-size: 0.98rem; }
 
 .aev-sec-body .shiny-input-container + .shiny-input-container { margin-top: 10px; }
 ")),
@@ -410,6 +412,11 @@ body {
                                       actionButton("add_ewas_btn",   "Tik \u0161ie",  class = "aev-btn-sm"),
                                       actionButton("merge_ewas_btn", "Sujungti",      class = "aev-btn-sm"),
                                       actionButton("reset_ewas_btn", "Atstatyti",     class = "aev-btn-sm")
+                             ),
+                             tags$div(style = "font-size: 0.95rem; color: #94a3b8; margin-top: 8px; line-height: 1.6;",
+                                      tags$b("Tik \u0161ie"), " \u2014 analizuoja tik \u012fkelt\u0105 EWAS.", tags$br(),
+                                      tags$b("Sujungti"), " \u2014 prideda prie esamo \u0161altinio.", tags$br(),
+                                      tags$b("Atstatyti"), " \u2014 gr\u0105\u017eina original\u0173 \u0161altin\u012f."
                              )
                  ),
                  
@@ -453,8 +460,7 @@ body {
                           ),
                           
                           tabPanel("Grupuotas",
-                                   tags$div(style="overflow-x:auto;",
-                                            plotOutput("grouped_plot", height="auto", width="1300px"))
+                                   plot_panel("grouped_plot", dl_id="dl_grouped", overflow="auto", width="1300px")
                           ),
                           
                           tabPanel("Jaccard",

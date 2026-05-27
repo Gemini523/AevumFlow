@@ -213,8 +213,9 @@ safe_dist_cols <- function(mat) {
     warning = function(w) "euclidean"
   )
 }
-make_heatmap <- function(df, title, na_col) {
+make_heatmap <- function(df, title, na_col, extra_clock_names = character(0), selected_clocks = NULL, custom_ewas_traits = character(0)) {
   agg <- aggregate(score ~ trait + pmid + clock, data = df, FUN = sum)
+  agg$pmid <- as.character(as.integer(agg$pmid))
   agg$trait_pmid <- paste0(agg$trait, " [", agg$pmid, "]")
   mat <- reshape(agg[, c("trait_pmid", "clock", "score")],
                  idvar = "trait_pmid", timevar = "clock", direction = "wide")
@@ -225,16 +226,20 @@ make_heatmap <- function(df, title, na_col) {
   mat[is.na(mat)] <- 0
   if (nrow(mat) == 0) return(NULL)
   
-  all_clock_names <- c("adaptage","causage","damage","hannum","horvath",
-                       "intrinclock","icage","phenoage","retroelementV1",
-                       "retroelementV2","skinandblood","epitoc","epitoc2","miage",
-                       "pc_dnamtl","pc_grimage","pc_hannum","pc_horvath",
-                       "pc_phenoage","pc_skinandblood")
-  missing_clocks <- setdiff(all_clock_names, colnames(mat))
-  if (length(missing_clocks) > 0) {
-    extra <- matrix(0, nrow = nrow(mat), ncol = length(missing_clocks),
-                    dimnames = list(rownames(mat), missing_clocks))
-    mat <- cbind(mat, extra)
+  base_clock_names <- c("adaptage","causage","damage","hannum","horvath",
+                        "intrinclock","icage","phenoage","retroelementV1",
+                        "retroelementV2","skinandblood","epitoc","epitoc2","miage",
+                        "pc_dnamtl","pc_grimage","pc_hannum","pc_horvath",
+                        "pc_phenoage","pc_skinandblood")
+  all_clock_names <- c(base_clock_names, extra_clock_names)
+  # canonical order: all known clocks; pad with 0 any selected clock missing from this category
+  if (!is.null(selected_clocks)) {
+    missing_selected <- setdiff(selected_clocks, colnames(mat))
+    if (length(missing_selected) > 0) {
+      pad <- matrix(0, nrow = nrow(mat), ncol = length(missing_selected),
+                    dimnames = list(rownames(mat), missing_selected))
+      mat <- cbind(mat, pad)
+    }
   }
   mat <- mat[, all_clock_names[all_clock_names %in% colnames(mat)], drop = FALSE]
   
@@ -253,14 +258,80 @@ make_heatmap <- function(df, title, na_col) {
   clust_cols <- ncol(mat) > 1
   cellheight <- max(14, min(28, round(600  / nrow(mat))))
   list(mat_log = mat_log, num_mat = num_mat, cap = cap,
-       clust_cols = clust_cols, cellheight = cellheight, mat = mat)
+       clust_cols = clust_cols, cellheight = cellheight, mat = mat,
+       custom_ewas_traits = custom_ewas_traits)
 }
 
 `%||%` <- function(a, b) if (!is.null(a)) a else b
 
+# ── Upload validation helpers ────────────────────────────────────────────────
+
+read_upload <- function(fileinfo, allowed_ext = c("csv", "xlsx")) {
+  ext <- tolower(tools::file_ext(fileinfo$name))
+  if (!ext %in% allowed_ext) {
+    return(list(error = paste0(
+      "Netinkamas failo formatas: '.", ext, "'. ",
+      "Leistini formatai: ", paste0(".", allowed_ext, collapse = ", "), "."
+    )))
+  }
+  df <- tryCatch(
+    if (ext == "xlsx") read.xlsx(fileinfo$datapath)
+    else               read.csv(fileinfo$datapath, stringsAsFactors = FALSE),
+    error = function(e) list(error = paste("Nepavyko perskaityti failo:", conditionMessage(e)))
+  )
+  if (is.list(df) && !is.data.frame(df)) return(df)  # tryCatch grąžino error list
+  list(data = as.data.frame(df))
+}
+
+EWAS_REQUIRED  <- c("cpg", "trait", "pmid", "beta", "sample_size")
+CLOCK_REQUIRED <- c("cpg", "coef")
+EWAS_HINT  <- "Tinkamas failas turi tureti stulpelius: cpg, trait, pmid, beta, sample_size."
+CLOCK_HINT <- "Tinkamas failas turi tureti stulpelius: cpg, coef."
+
+validate_ewas_df <- function(df) {
+  msgs    <- character(0)
+  missing <- setdiff(EWAS_REQUIRED, names(df))
+  extra   <- setdiff(names(df), EWAS_REQUIRED)
+  
+  col_parts <- character(0)
+  if (length(missing) > 0) col_parts <- c(col_parts, paste0("truksta: ", paste(missing, collapse = ", ")))
+  if (length(extra)   > 0) col_parts <- c(col_parts, paste0("neleistini: ", paste(extra, collapse = ", ")))
+  if (length(col_parts) > 0)
+    msgs <- c(msgs, paste0("Netinkami stulpeliai (", paste(col_parts, collapse = "; "), "). Leistini: ", paste(EWAS_REQUIRED, collapse = ", "), "."))
+  
+  if ("beta" %in% names(df) && !is.numeric(df$beta))
+    msgs <- c(msgs, paste0("Stulpelis 'beta' turi buti skaitinis (rastas tipas: ", class(df$beta), ")."))
+  if ("sample_size" %in% names(df) && !is.numeric(df$sample_size))
+    msgs <- c(msgs, paste0("Stulpelis 'sample_size' turi buti skaitinis (rastas tipas: ", class(df$sample_size), ")."))
+  if (nrow(df) == 0)
+    msgs <- c(msgs, "Failas tuscias (0 eiluciu).")
+  
+  msgs
+}
+
+validate_clock_df <- function(df) {
+  msgs    <- character(0)
+  missing <- setdiff(CLOCK_REQUIRED, names(df))
+  extra   <- setdiff(names(df), CLOCK_REQUIRED)
+  
+  col_parts <- character(0)
+  if (length(missing) > 0) col_parts <- c(col_parts, paste0("truksta: ", paste(missing, collapse = ", ")))
+  if (length(extra)   > 0) col_parts <- c(col_parts, paste0("neleistini: ", paste(extra, collapse = ", ")))
+  if (length(col_parts) > 0)
+    msgs <- c(msgs, paste0("Netinkami stulpeliai (", paste(col_parts, collapse = "; "), "). Leistini: ", paste(CLOCK_REQUIRED, collapse = ", "), "."))
+  
+  if ("coef" %in% names(df) && !is.numeric(df$coef))
+    msgs <- c(msgs, paste0("Stulpelis 'coef' turi buti skaitinis (rastas tipas: ", class(df$coef), ")."))
+  if (nrow(df) == 0)
+    msgs <- c(msgs, "Failas tuscias (0 eiluciu).")
+  
+  msgs
+}
+
 # ── Base-R heatmap ──────────────────────────────────────────────────────────
-draw_heatmap <- function(h, title, CW = 90, CH = 20) {
+draw_heatmap <- function(h, title, CW = 90, CH = 20, custom_ids = character(0)) {
   mat  <- h$mat_log; nums <- h$num_mat; cap <- h$cap
+  custom_ewas_traits <- if (!is.null(h$custom_ewas_traits)) h$custom_ewas_traits else character(0)
   nr   <- nrow(mat); nc <- ncol(mat)
   col_pal <- colorRampPalette(c("#4575B4","#F7F7F7","#D73027"))(100)
   breaks  <- seq(-cap, cap, length.out = 101)
@@ -292,16 +363,25 @@ draw_heatmap <- function(h, title, CW = 90, CH = 20) {
   }
   
   for (j in seq_len(nc)) {
-    x <- left_m + (j - 0.5) * CW
-    text(x, bot_m - CH * 0.1, col_labels[j], srt = 45, adj = c(1, 0.5),
-         cex = max(0.5, min(0.85, CW/100)), xpd = TRUE)
+    x   <- left_m + (j - 0.5) * CW
+    lbl <- col_labels[j]
+    is_custom <- lbl %in% custom_ids
+    text(x, bot_m - CH * 0.1, lbl, srt = 45, adj = c(1, 0.5),
+         cex  = max(0.5, min(0.85, CW/100)),
+         font = if (is_custom) 2 else 1,
+         col  = if (is_custom) "#C05000" else "black",
+         xpd  = TRUE)
   }
   
   row_x <- left_m + nc * CW + CW * 0.3
   for (i in seq_len(nr)) {
-    y <- bot_m + (nr - i + 0.5) * CH
+    y        <- bot_m + (nr - i + 0.5) * CH
+    is_cewas  <- row_labels[i] %in% custom_ewas_traits
     text(row_x, y, row_labels[i], adj = c(0, 0.5),
-         cex = max(0.4, min(0.72, CH/22)), xpd = TRUE)
+         cex  = max(0.4, min(0.72, CH/22)),
+         font = if (is_cewas) 2 else 1,
+         col  = if (is_cewas) "#C05000" else "black",
+         xpd  = TRUE)
   }
   # title
   text(left_m + nc * CW / 2, bot_m + nr * CH + CH * 0.7,
@@ -318,18 +398,20 @@ heatmap_canvas <- function(h, CW = 90, CH = 20) {
 heatmap_cw <- function(nc) 60L
 heatmap_ch <- function(nr) 40L
 
-heatmap_save <- function(h, title, file) {
+heatmap_save <- function(h, title, file, custom_ids = character(0)) {
   CW <- 30; CH <- 20L
   cv <- heatmap_canvas(h, CW, CH)
   cairo_pdf(file, width=cv$w/72, height=cv$h/72)
-  draw_heatmap(h, title, CW, CH)
+  draw_heatmap(h, title, CW, CH, custom_ids)
   dev.off()
 }
 
 server <- function(input, output, session) {
   
-  custom_clocks <- reactiveVal(list())
-  active_ewas   <- reactiveVal(EWAS_SOURCES[["all"]])
+  custom_clocks      <- reactiveVal(list())
+  active_ewas        <- reactiveVal(EWAS_SOURCES[["all"]])
+  selected_clock_ids <- reactiveVal(character(0))
+  custom_ewas_traits <- reactiveVal(character(0))
   
   observeEvent(input$ewas_source, {
     req(input$ewas_source)
@@ -353,21 +435,23 @@ server <- function(input, output, session) {
   
   observeEvent(input$merge_ewas_btn, {
     req(input$custom_ewas_file)
-    ext <- tools::file_ext(input$custom_ewas_file$name)
-    df  <- tryCatch(
-      if (ext == "xlsx") read.xlsx(input$custom_ewas_file$datapath)
-      else               read.csv(input$custom_ewas_file$datapath),
-      error = function(e) NULL
-    )
-    if (is.null(df)) { showNotification("Nepavyko įkelti failo", type="error"); return() }
-    missing <- setdiff(c("cpg","trait","pmid","beta","sample_size"), names(df))
-    if (length(missing) > 0) {
-      showNotification(paste("Trūksta stulpelių:", paste(missing, collapse=", ")), type="error"); return()
+    res <- read_upload(input$custom_ewas_file)
+    if (!is.null(res$error)) { showNotification(res$error, type="error", duration=8); return() }
+    msgs <- validate_ewas_df(res$data)
+    if (length(msgs) > 0) {
+      for (m in msgs) showNotification(m, type="error", duration=8)
+      return()
     }
-    current <- active_ewas()
-    merged  <- rbind(current, as.data.frame(df))
+    current  <- active_ewas()
+    new_data <- res$data[, intersect(names(res$data), names(current)), drop = FALSE]
+    for (col in setdiff(names(current), names(new_data))) new_data[[col]] <- NA
+    new_data <- new_data[, names(current), drop = FALSE]
+    merged   <- rbind(current, new_data)
     active_ewas(merged)
-    showNotification(paste("Apjungta:", nrow(current), "+", nrow(df), "=", nrow(merged), "eilučių"), type="message")
+    custom_ewas_traits(unique(c(custom_ewas_traits(), paste0(res$data$trait, " [", as.character(as.integer(res$data$pmid)), "]"))))
+    showNotification(paste0("EWAS sujungtas (", nrow(current), " + ", nrow(new_data), " = ", nrow(merged), " eilučių)."), type="message")
+    run_analysis_all()
+    jaccard_compute()
   })
   
   traits_selected <- reactiveVal(FALSE)
@@ -385,73 +469,62 @@ server <- function(input, output, session) {
   })
   
   observeEvent(input$add_clock_btn, {
-    req(input$custom_clock_file, nchar(trimws(input$custom_clock_name)) > 0)
-    ext <- tools::file_ext(input$custom_clock_file$name)
-    df  <- tryCatch(
-      if (ext == "xlsx") read.xlsx(input$custom_clock_file$datapath)
-      else               read.csv(input$custom_clock_file$datapath),
-      error = function(e) NULL
-    )
-    if (is.null(df) || !all(c("cpg","coef") %in% names(df))) {
-      showNotification("Failas turi turėti 'cpg' ir 'coef' stulpelius", type="error"); return()
+    if (nchar(trimws(input$custom_clock_name %||% "")) == 0) {
+      showNotification("Įveskite laikrodžio pavadinimą.", type="error", duration=8)
+      return()
+    }
+    req(input$custom_clock_file)
+    res <- read_upload(input$custom_clock_file)
+    if (!is.null(res$error)) { showNotification(res$error, type="error", duration=8); return() }
+    msgs <- validate_clock_df(res$data)
+    if (length(msgs) > 0) {
+      for (m in msgs) showNotification(m, type="error", duration=8)
+      return()
     }
     clock_id   <- gsub(" ", "_", tolower(trimws(input$custom_clock_name)))
     clocks_now <- custom_clocks()
-    clocks_now[[clock_id]] <- as.data.frame(df)
+    clocks_now[[clock_id]] <- res$data
     custom_clocks(clocks_now)
     choices_now <- setNames(names(clocks_now), gsub("_"," ", tools::toTitleCase(names(clocks_now))))
     updateCheckboxGroupInput(session, "clock_choice_custom", choices=choices_now, selected=names(clocks_now))
     showNotification(paste("Laikrodis", input$custom_clock_name, "pridėtas"), type="message")
   })
   
-  observeEvent(input$add_ewas_btn, {
-    req(input$custom_ewas_file)
-    ext <- tools::file_ext(input$custom_ewas_file$name)
-    df  <- tryCatch(
-      if (ext == "xlsx") read.xlsx(input$custom_ewas_file$datapath)
-      else               read.csv(input$custom_ewas_file$datapath),
-      error = function(e) NULL
-    )
-    if (is.null(df)) { showNotification("Nepavyko įkelti failo", type="error"); return() }
-    missing <- setdiff(c("cpg","trait","pmid","beta","sample_size"), names(df))
-    if (length(missing) > 0) {
-      showNotification(paste("Trūksta stulpelių:", paste(missing, collapse=", ")), type="error"); return()
-    }
-    active_ewas(as.data.frame(df))
-    showNotification("EWAS duomenys įkelti", type="message")
-  })
+  results <- reactiveVal(NULL)
   
-  observeEvent(input$reset_ewas_btn, {
-    active_ewas(EWAS_SOURCES[[input$ewas_source]])
-    showNotification("Grąžinti originalūs EWAS duomenys", type="message")
-  })
-  
-  results <- eventReactive(input$run_btn, {
+  run_analysis_all <- function() {
     clock_choice <- c(input$clock_choice, input$clock_choice_pc, input$clock_choice_custom)
-    req(length(clock_choice) > 0)
+    if (length(clock_choice) == 0) return()
+    selected_clock_ids(clock_choice)
     traits <- if (length(input$selected_traits) > 0) input$selected_traits else NULL
     all_clocks_combined <- c(CLOCKS, CLOCKS_PC, custom_clocks())
-    withProgress(message = "Skaičiuojama...", value = 0, {
+    withProgress(message = "Skaiciuojama...", value = 0, {
       res_list <- lapply(seq_along(clock_choice), function(i) {
         clock_name <- clock_choice[i]
         incProgress(1/length(clock_choice), detail = clock_name)
         mult <- if (clock_name %in% names(CLOCK_MULTIPLIER)) CLOCK_MULTIPLIER[[clock_name]] else NULL
-        
-        # filter by sample size
         ewas_filtered <- active_ewas()
         ewas_filtered <- ewas_filtered[ewas_filtered$sample_size >= 200, ]
-        
-        if (clock_name %in% colnames(JACCARD_WHITELIST)) {
-          keep <- JACCARD_WHITELIST[JACCARD_WHITELIST[[clock_name]] == TRUE,
-                                    c("trait", "pmid")]
-          ewas_filtered <- ewas_filtered[
-            paste(ewas_filtered$trait, as.integer(ewas_filtered$pmid)) %in%
-              paste(keep$trait,          as.integer(keep$pmid)), ]
+        cet_keys <- custom_ewas_traits()
+        has_custom <- length(cet_keys) > 0
+        if (!has_custom && clock_name %in% colnames(JACCARD_WHITELIST)) {
+          keep <- JACCARD_WHITELIST[JACCARD_WHITELIST[[clock_name]] == TRUE, c("trait", "pmid")]
+          in_whitelist <- paste(ewas_filtered$trait, as.integer(ewas_filtered$pmid)) %in%
+            paste(keep$trait, as.integer(keep$pmid))
+          ewas_filtered <- ewas_filtered[in_whitelist, ]
+        } else if (has_custom && clock_name %in% colnames(JACCARD_WHITELIST)) {
+          keep <- JACCARD_WHITELIST[JACCARD_WHITELIST[[clock_name]] == TRUE, c("trait", "pmid")]
+          cet_trait_pmid <- paste(
+            sub(" \\[.*\\]$", "", cet_keys),
+            sub("^.* \\[(.*)\\]$", "\\1", cet_keys)
+          )
+          is_custom    <- paste(ewas_filtered$trait, as.character(as.integer(ewas_filtered$pmid))) %in% cet_trait_pmid
+          in_whitelist <- paste(ewas_filtered$trait, as.integer(ewas_filtered$pmid)) %in%
+            paste(keep$trait, as.integer(keep$pmid))
+          ewas_filtered <- ewas_filtered[is_custom | in_whitelist, ]
         }
-        
         if (nrow(ewas_filtered) == 0) return(list(error = TRUE))
-        
-        res <- if (clock_name %in% c("epitoc","epitoc2","miage")) {
+        res <- if (clock_name == "epitoc") {
           run_analysis_mean(all_clocks_combined[[clock_name]], ewas_filtered, traits)
         } else {
           run_analysis(all_clocks_combined[[clock_name]], ewas_filtered, traits, mult)
@@ -460,7 +533,31 @@ server <- function(input, output, session) {
         res
       })
     })
-    do.call(rbind, res_list[!sapply(res_list, function(x) "error" %in% names(x))])
+    results(do.call(rbind, res_list[!sapply(res_list, function(x) "error" %in% names(x))]))
+  }
+  
+  observeEvent(input$run_btn, { run_analysis_all(); jaccard_compute() })
+  
+  observeEvent(input$add_ewas_btn, {
+    req(input$custom_ewas_file)
+    res <- read_upload(input$custom_ewas_file)
+    if (!is.null(res$error)) { showNotification(res$error, type="error", duration=8); return() }
+    msgs <- validate_ewas_df(res$data)
+    if (length(msgs) > 0) {
+      for (m in msgs) showNotification(m, type="error", duration=8)
+      return()
+    }
+    active_ewas(res$data)
+    custom_ewas_traits(unique(paste0(res$data$trait, " [", as.character(as.integer(res$data$pmid)), "]")))
+    showNotification(paste0("EWAS pridėtas (", nrow(res$data), " eilučių)."), type="message")
+    run_analysis_all()
+    jaccard_compute()
+  }, ignoreInit = TRUE)
+  
+  observeEvent(input$reset_ewas_btn, {
+    active_ewas(EWAS_SOURCES[[input$ewas_source]])
+    custom_ewas_traits(character(0))
+    showNotification("Graztinti originalus EWAS duomenys", type="message")
   })
   
   output$results_tbl <- renderDT({
@@ -475,9 +572,10 @@ server <- function(input, output, session) {
       formatStyle("score", color=styleInterval(0, c("#C0392B","#2471A3")), fontWeight="bold")
   })
   
-  jaccard_results <- eventReactive(input$run_btn, {
+  jaccard_results <- reactiveVal(NULL)
+  jaccard_compute <- function() {
     clock_choice        <- c(input$clock_choice, input$clock_choice_pc, input$clock_choice_custom)
-    req(length(clock_choice) > 0)
+    if (length(clock_choice) == 0) return()
     all_clocks_combined <- c(CLOCKS, CLOCKS_PC, custom_clocks())
     full_ewas <- EWAS_FULL[[input$ewas_source]]
     
@@ -490,7 +588,7 @@ server <- function(input, output, session) {
     pc_clocks    <- intersect(clock_choice, names(CLOCKS_PC))
     nonpc_clocks <- setdiff(clock_choice, names(CLOCKS_PC))
     
-    do.call(rbind, lapply(groups, function(study) {
+    jac_df <- do.call(rbind, lapply(groups, function(study) {
       ewas_cpgs <- unique(study$cpg)
       raw       <- full_ewas[full_ewas$trait == study$trait[1] & full_ewas$pmid == study$pmid[1], ]
       n_ewas    <- length(unique(raw$cpg))
@@ -520,7 +618,8 @@ server <- function(input, output, session) {
       }
       rows
     }))
-  })
+    jaccard_results(jac_df)
+  }
   
   output$jaccard_plot <- renderPlot({
     req(jaccard_results())
@@ -543,8 +642,20 @@ server <- function(input, output, session) {
     abline(v=seq_len(n_c), col="#EEEEEE", lwd=0.8)
     symbols(df$x, df$y, circles=sqrt(df$jaccard/max_j)*max_cs,
             inches=max_cs/10, add=TRUE, bg="#4575B488", fg="#4575B4")
-    axis(1, at=seq_len(n_c), labels=clocks, las=2, cex.axis=0.9, tick=FALSE)
-    axis(4, at=seq_len(n_s), labels=studies, las=2, cex.axis=0.75, tick=FALSE, hadj=0)
+    axis(1, at=seq_len(n_c), labels=rep("", n_c), las=2, tick=FALSE)
+    cc_ids <- names(custom_clocks())
+    for (ci in seq_len(n_c)) {
+      is_c <- clocks[ci] %in% cc_ids
+      mtext(clocks[ci], side=1, at=ci, las=2,
+            cex=0.9, font=if (is_c) 2 else 1, col=if (is_c) "#C05000" else "black", line=0.5)
+    }
+    axis(4, at=seq_len(n_s), labels=rep("", n_s), tick=FALSE)
+    cet <- custom_ewas_traits()
+    for (si in seq_len(n_s)) {
+      is_ce <- studies[si] %in% cet
+      mtext(studies[si], side=4, at=si, las=2, cex=0.75, adj=0,
+            font=if (is_ce) 2 else 1, col=if (is_ce) "#C05000" else "black", line=0.3)
+    }
     mtext("Jaccard indeksas (EWAS × laikrodis)", side=3, line=0.5, font=2, cex=1.0)
     box(col="gray60")
   }, height=function() {
@@ -575,8 +686,20 @@ server <- function(input, output, session) {
       abline(v=seq_len(n_c), col="#EEEEEE", lwd=0.8)
       symbols(df$x, df$y, circles=sqrt(df$jaccard/max_j)*max_cs,
               inches=max_cs/10, add=TRUE, bg="#4575B488", fg="#4575B4")
-      axis(1, at=seq_len(n_c), labels=clocks, las=2, cex.axis=0.9, tick=FALSE)
-      axis(4, at=seq_len(n_s), labels=studies, las=2, cex.axis=0.95, tick=FALSE, hadj=0)
+      axis(1, at=seq_len(n_c), labels=rep("", n_c), las=2, tick=FALSE)
+      cc_ids <- names(custom_clocks())
+      for (ci in seq_len(n_c)) {
+        is_c <- clocks[ci] %in% cc_ids
+        mtext(clocks[ci], side=1, at=ci, las=2,
+              cex=0.9, font=if (is_c) 2 else 1, col=if (is_c) "#C05000" else "black", line=0.5)
+      }
+      axis(4, at=seq_len(n_s), labels=rep("", n_s), tick=FALSE)
+      cet <- custom_ewas_traits()
+      for (si in seq_len(n_s)) {
+        is_ce <- studies[si] %in% cet
+        mtext(studies[si], side=4, at=si, las=2, cex=0.95, adj=0,
+              font=if (is_ce) 2 else 1, col=if (is_ce) "#C05000" else "black", line=0.3)
+      }
       mtext("Jaccard indeksas", side=3, line=0.5, font=2, cex=1.0)
       box(col="gray60")
       dev.off()
@@ -586,16 +709,16 @@ server <- function(input, output, session) {
   output$heatmap_plot <- renderPlot({
     req(results())
     df <- results()
-    h  <- make_heatmap(df, "Age shift by trait and clock", "#F7F7F7")
+    h  <- make_heatmap(df, "Age shift by trait and clock", "#F7F7F7", names(custom_clocks()), selected_clock_ids(), custom_ewas_traits())
     if (is.null(h)) return(NULL)
     CW <- heatmap_cw(ncol(h$mat_log)); CH <- heatmap_ch(1L)
-    draw_heatmap(h, "Age shift by trait and clock", CW, CH)
+    draw_heatmap(h, "Age shift by trait and clock", CW, CH, names(custom_clocks()))
   }, height=function() {
-    h <- make_heatmap(results(), "", ""); if (is.null(h)) return(700)
+    h <- make_heatmap(results(), "", "", names(custom_clocks()), selected_clock_ids(), custom_ewas_traits()); if (is.null(h)) return(700)
     CW <- heatmap_cw(ncol(h$mat_log)); CH <- heatmap_ch(1L)
     heatmap_canvas(h, CW, CH)$h
   }, width=function() {
-    h <- make_heatmap(results(), "", ""); if (is.null(h)) return(900)
+    h <- make_heatmap(results(), "", "", names(custom_clocks()), selected_clock_ids(), custom_ewas_traits()); if (is.null(h)) return(900)
     CW <- heatmap_cw(ncol(h$mat_log)); CH <- heatmap_ch(1L)
     heatmap_canvas(h, CW, CH)$w
   }, res=120)
@@ -605,18 +728,18 @@ server <- function(input, output, session) {
       req(results())
       df <- results()[results()$trait %in% TRAIT_GROUPS[[category_name]], ]
       if (nrow(df) == 0) return(NULL)
-      h <- make_heatmap(df, category_name, "#F7F7F7")
+      h <- make_heatmap(df, category_name, "#F7F7F7", names(custom_clocks()), selected_clock_ids(), custom_ewas_traits())
       if (is.null(h)) return(NULL)
       CW <- heatmap_cw(ncol(h$mat_log)); CH <- heatmap_ch(1L)
-      draw_heatmap(h, category_name, CW, CH)
+      draw_heatmap(h, category_name, CW, CH, names(custom_clocks()))
     }, height=function() {
       df <- results()[results()$trait %in% TRAIT_GROUPS[[category_name]], ]
-      h  <- make_heatmap(df, "", ""); if (is.null(h)) return(400)
+      h  <- make_heatmap(df, "", "", names(custom_clocks()), selected_clock_ids(), custom_ewas_traits()); if (is.null(h)) return(400)
       CW <- heatmap_cw(ncol(h$mat_log)); CH <- heatmap_ch(1L)
       heatmap_canvas(h, CW, CH)$h
     }, width=function() {
       df <- results()[results()$trait %in% TRAIT_GROUPS[[category_name]], ]
-      h  <- make_heatmap(df, "", ""); if (is.null(h)) return(600)
+      h  <- make_heatmap(df, "", "", names(custom_clocks()), selected_clock_ids(), custom_ewas_traits()); if (is.null(h)) return(600)
       CW <- heatmap_cw(ncol(h$mat_log)); CH <- heatmap_ch(1L)
       heatmap_canvas(h, CW, CH)$w
     }, res=120)
@@ -710,24 +833,33 @@ server <- function(input, output, session) {
     cols   = c("#cb181d","#6a51a3","#238b45","#d4a800")
   )
   
-  draw_dendro <- function(d, cex_lbl = 0.85) {
+  draw_dendro <- function(d, cex_lbl = 0.85, custom_ids = character(0)) {
     hc  <- d$hc; n <- length(hc$labels)
     bot <- max(nchar(hc$labels)) * cex_lbl * 0.55 + 1.5
-    dend <- color_dend_leaves(as.dendrogram(hc), CLOCK_FAM_COL)
+    fam_col <- CLOCK_FAM_COL
+    for (cid in custom_ids) fam_col[cid] <- "#C05000"
+    
+    dend <- color_dend_leaves(as.dendrogram(hc), fam_col)
     par(mar = c(bot, 4.5, 3.5, 16), bg = "white")
     plot(dend, axes = TRUE,
          ylab = "Pearson koreliacijos atstumas (1 - r)",
          main = "Laikrodžių dendrograma", cex = cex_lbl)
     abline(h = 0, col = "grey85", lty = 2)
-    legend("topright", inset = c(-0.30, 0), xpd = TRUE,
-           legend = CLOCK_FAM_LEGEND$labels,
-           col    = CLOCK_FAM_LEGEND$cols,
+    leg_labels <- CLOCK_FAM_LEGEND$labels
+    leg_cols   <- CLOCK_FAM_LEGEND$cols
+    if (length(custom_ids) > 0) {
+      leg_labels <- c(leg_labels, "Įkelti laikrodžiai")
+      leg_cols   <- c(leg_cols, "#C05000")
+    }
+    legend("topright", inset = c(-0.45, 0), xpd = TRUE,
+           legend = leg_labels,
+           col    = leg_cols,
            lwd = 2.5, bty = "n", cex = 0.75, title = "Grupė", title.font = 2)
   }
   
   output$dendro_plot <- renderPlot({
     d <- dendro_data(); if (is.null(d)) return(NULL)
-    draw_dendro(d)
+    draw_dendro(d, custom_ids = names(custom_clocks()))
   }, height = function() { 580 },
   width  = function() {
     d <- dendro_data(); if (is.null(d)) return(600)
@@ -740,7 +872,7 @@ server <- function(input, output, session) {
       d <- dendro_data()
       if (is.null(d)) { cairo_pdf(file); dev.off(); return() }
       cairo_pdf(file, width = max(7, length(d$hc$labels)*0.5+2), height = 7)
-      draw_dendro(d)
+      draw_dendro(d, custom_ids = names(custom_clocks()))
       dev.off()
     }
   )
@@ -766,40 +898,71 @@ server <- function(input, output, session) {
     list(hc=hc)
   })
   
-  TRAIT_GRP_COLS <- c("#cb181d","#f16913","#41ab5d","#2171b5","#6a51a3",
-                      "#d94801","#238b45","#fb6a4a","#4292c6","#a1d99b","#969696", "black")
+  # Fixed colors per category matching legend; extra categories get new colors (not black/orange)
+  TRAIT_GRP_FIXED <- c(
+    "Senėjimas"                        = "#cb181d",   # raudona
+    "Su motina susiję veiksniai"       = "#f16913",   # oranžinė
+    "Svoris / nutukimas"               = "#e07b00",   # tamsiai oranžinė
+    "Medžiagų apykaita"                = "#33a02c",   # žalia
+    "Širdis / kraujagyslės"            = "#74b9e0",   # šviesiai mėlyna
+    "Vėžys"                            = "#8b0000",   # tamsiai raudona
+    "Imuniniai / uždegiminiai"         = "#7b2d8b",   # violetinė
+    "Neurologiniai / psichiatriniai"   = "#fb6a4a",   # lašišos
+    "Infekcijos"                       = "#fdae61",   # šviesiai oranžinė
+    "Rūkymo poveikiai"                 = "#1d3a8a",   # tamsiai mėlyna
+    "Genetiniai / sindromai"           = "#636363",   # tamsiai pilka
+    "Socialiniai veiksniai"            = "#6a51a3",   # mėlynai violetinė
+    "Kita"                             = "#969696"    # pilka
+  )
+  EXTRA_COLS <- c("#4daf4a","#984ea3","#a65628","#f781bf","#999999",
+                  "#e41a1c","#ff7f00","#377eb8","#e6ab02","#66c2a5","#fc8d62")
   
-  draw_ewas_dendro <- function(d, cex_lbl = 0.55) {
+  draw_ewas_dendro <- function(d, cex_lbl = 0.55, custom_ewas_keys = character(0)) {
     hc  <- d$hc; n <- length(hc$labels)
     grp_names  <- names(TRAIT_GROUPS)
     row_traits <- sub(" \\[.*\\]$", "", hc$labels)
     
+    # build per-group color map: fixed for known, new colors for unknown, black for custom EWAS
+    grp_col <- TRAIT_GRP_FIXED
+    extra_idx <- 1L
+    for (g in grp_names) {
+      if (!g %in% names(grp_col)) {
+        grp_col[g] <- EXTRA_COLS[((extra_idx - 1L) %% length(EXTRA_COLS)) + 1L]
+        extra_idx <- extra_idx + 1L
+      }
+    }
+    
     lcol <- setNames(rep("#999999", n), hc$labels)
-    for (i in seq_along(grp_names))
-      lcol[hc$labels[row_traits %in% TRAIT_GROUPS[[grp_names[i]]]]] <-
-      TRAIT_GRP_COLS[((i-1) %% length(TRAIT_GRP_COLS)) + 1]
+    for (g in grp_names)
+      lcol[hc$labels[row_traits %in% TRAIT_GROUPS[[g]]]] <- grp_col[g]
+    for (lbl in hc$labels)
+      if (lbl %in% custom_ewas_keys) lcol[lbl] <- "black"
     
-    phy <- as.phylo(hc)
-    
+    phy      <- as.phylo(hc)
     tip_cols <- lcol[phy$tip.label]
     
     par(mar = c(1, 1, 2, 1), bg = "white")
     plot(phy, type = "fan", show.tip.label = TRUE,
          tip.color = tip_cols,
-         cex = cex_lbl-0.1,
+         cex = cex_lbl - 0.1,
          main = "EWAS studijų dendrograma",
          label.offset = 0.02)
     
-    shown <- grp_names[sapply(grp_names, function(g) any(row_traits %in% TRAIT_GROUPS[[g]]))]
-    legend("topleft", xpd = TRUE, inset = c(0, -0.03), 
-           legend = shown,
-           col = TRAIT_GRP_COLS[(match(shown, grp_names)-1) %% length(TRAIT_GRP_COLS) + 1],
-           lwd = 2.5, bty = "o", bg = "white", box.col = "white", cex = 0.4, title = "Kategorija", title.font = 2)
+    shown     <- grp_names[sapply(grp_names, function(g) any(row_traits %in% TRAIT_GROUPS[[g]]))]
+    shown_col <- grp_col[shown]
+    if (length(custom_ewas_keys) > 0) {
+      shown     <- c(shown, "Pridėti EWAS")
+      shown_col <- c(shown_col, "black")
+    }
+    legend("topleft", xpd = TRUE, inset = c(0, -0.03),
+           legend = shown, col = shown_col,
+           lwd = 2.5, bty = "o", bg = "white", box.col = "white",
+           cex = 0.4, title = "Kategorija", title.font = 2)
   }
   
   output$ewas_dendro_plot <- renderPlot({
     d <- ewas_dendro_data(); if (is.null(d)) return(NULL)
-    draw_ewas_dendro(d)
+    draw_ewas_dendro(d, custom_ewas_keys = custom_ewas_traits())
   }, height = function() { 1100 },
   width  = function() { 1100 }, res=150)
   
@@ -809,7 +972,7 @@ server <- function(input, output, session) {
       d <- ewas_dendro_data()
       if (is.null(d)) { cairo_pdf(file); dev.off(); return() }
       cairo_pdf(file, width = 14, height = 14)
-      draw_ewas_dendro(d)
+      draw_ewas_dendro(d, custom_ewas_keys = custom_ewas_traits())
       dev.off()
     }
   )
@@ -824,29 +987,37 @@ server <- function(input, output, session) {
   output$grouped_plot <- renderPlot({
     req(results())
     df  <- results()
-    agg <- aggregate(score ~ trait + clock, data=df, FUN=sum)
+    req(nrow(df) > 0, "score" %in% names(df), "pmid" %in% names(df))
+    agg <- aggregate(score ~ trait + pmid + clock, data=df, FUN=sum)
+    agg$trait_pmid <- paste0(agg$trait, " [", agg$pmid, "]")
     score_lim <- input$score_filter %||% 15
     agg <- agg[agg$score >= -score_lim & agg$score <= score_lim, ]
     if (nrow(agg) == 0) return(NULL)
-    ordered_traits <- c(); spacing <- 2; current_y <- 0; trait_y <- c()
+    ordered_tp <- c(); spacing <- 2; current_y <- 0; trait_y <- c()
     cc <- custom_clocks()
+    cet <- custom_ewas_traits()
     for (grp in names(TRAIT_GROUPS)) {
-      grp_traits <- intersect(TRAIT_GROUPS[[grp]], unique(agg$trait))
-      if (length(grp_traits) == 0) next
-      for (t in rev(sort(grp_traits))) { current_y <- current_y + spacing; trait_y[t] <- current_y }
-      ordered_traits <- c(ordered_traits, rev(sort(grp_traits)))
+      grp_tp <- intersect(TRAIT_GROUPS[[grp]], unique(agg$trait))
+      if (length(grp_tp) == 0) next
+      for (tr in rev(sort(grp_tp))) {
+        tp_vals <- sort(unique(agg$trait_pmid[agg$trait == tr]))
+        for (tp in rev(tp_vals)) { current_y <- current_y + spacing; trait_y[tp] <- current_y }
+        ordered_tp <- c(ordered_tp, rev(tp_vals))
+      }
       current_y <- current_y + spacing
     }
     total_y      <- current_y
-    traits_label <- ifelse(nchar(ordered_traits) > 50, paste0(substr(ordered_traits,1,47),"..."), ordered_traits)
-    names(traits_label) <- ordered_traits
+    traits_label <- ifelse(nchar(ordered_tp) > 55, paste0(substr(ordered_tp,1,52),"..."), ordered_tp)
+    names(traits_label) <- ordered_tp
     all_colors <- if (length(cc) > 0) c(CLOCK_COLORS, setNames(rep("#888888",length(cc)),names(cc))) else CLOCK_COLORS
-    agg$y         <- trait_y[agg$trait]
+    agg$y         <- trait_y[agg$trait_pmid]
     agg$point_col <- all_colors[agg$clock]
-    x_range     <- range(agg$score, na.rm=TRUE)
-    x_lim       <- c(x_range[1]-diff(x_range)*0.05, x_range[2]+diff(x_range)*0.05)
-    right_margin <- max(10, ceiling(max(nchar(traits_label))*0.45))
-    par(mar=c(5, 3, 4, right_margin + 14), bg="white")
+    x_range      <- range(agg$score, na.rm=TRUE)
+    x_lim        <- c(x_range[1]-diff(x_range)*0.05, x_range[2]+diff(x_range)*0.05)
+    trait_chars  <- max(nchar(traits_label))
+    trait_margin <- max(6, ceiling(trait_chars * 0.38))
+    grp_line     <- trait_margin + 2
+    par(mar=c(5, 4, 4, grp_line + 10), bg="white")
     plot(NA, xlim=x_lim, ylim=c(0, total_y+spacing), xlab="", ylab="", axes=FALSE)
     rect(par("usr")[1], par("usr")[3], par("usr")[2], par("usr")[4], col="white", border=NA)
     grp_counter <- 0; current_y <- 0
@@ -855,22 +1026,27 @@ server <- function(input, output, session) {
       if (length(grp_traits) == 0) next
       grp_counter <- grp_counter + 1
       grp_start   <- current_y
-      grp_end     <- current_y + length(grp_traits)*spacing + spacing
+      grp_end     <- current_y + length(unique(agg$trait_pmid[agg$trait %in% grp_traits]))*spacing + spacing
       rect(par("usr")[1], grp_start, par("usr")[2], grp_end,
            col=if (grp_counter%%2==0) "#E8EEF4" else "#FFFFFF", border=NA)
       mtext(grp, side=4, at=(grp_start+grp_end)/2, las=2, cex=0.65, font=2,
-            col="#444444", line=right_margin-1, xpd=TRUE)
+            col="#444444", line=grp_line, xpd=TRUE)
       current_y <- grp_end
     }
     abline(h=trait_y, col="#DDDDDD", lwd=0.8)
     abline(v=0, col="black", lwd=0.8)
     points(agg$score, agg$y, col=agg$point_col, pch=16, cex=1.2)
     axis(1, at=pretty(x_lim,n=10), cex.axis=1.0, padj=0.3)
-    axis(4, at=trait_y[ordered_traits], labels=traits_label[ordered_traits],
-         las=2, cex.axis=0.85, tick=FALSE, hadj=0)
+    axis(4, at=trait_y[ordered_tp], labels=rep("", length(ordered_tp)), tick=FALSE)
+    for (ti in seq_along(ordered_tp)) {
+      is_ce <- ordered_tp[ti] %in% cet
+      mtext(traits_label[ordered_tp[ti]], side=4, at=trait_y[ordered_tp[ti]], las=2,
+            cex=0.72, adj=0, font=if (is_ce) 2 else 1,
+            col=if (is_ce) "#C05000" else "black", line=0.3)
+    }
     box(col="gray60")
     mtext("Amžiaus skirtumas metais", side=1, line=3, cex=1.1)
-    mtext("Veiksnių įtaka epigenetiniams laikrodžiams", side=3, line=1, font=2, cex=1.1)
+    mtext("Veiksnių įtaka epigenetiniams laikrodžiams", side=3, line=1, font=2, cex=1.1, adj=0.5)
     all_labels <- if (length(cc) > 0) c(CLOCK_LABELS, setNames(gsub("_"," ",tools::toTitleCase(names(cc))),names(cc))) else CLOCK_LABELS
     selected_clocks <- intersect(unique(agg$clock), names(all_colors))
     legend("topright", inset=c(-14/par("pin")[1], 0), xpd=TRUE,
@@ -886,6 +1062,83 @@ server <- function(input, output, session) {
   output$dl_btn <- downloadHandler(
     filename = "rezultatai.csv",
     content  = function(f) write.csv(results(), f, row.names=FALSE)
+  )
+  
+  # DOWNLOAD: GRUPUOTAS DOT PLOT
+  output$dl_grouped <- downloadHandler(
+    filename = "grupuotas_dot_plot.pdf",
+    content  = function(file) {
+      df  <- results()
+      req(nrow(df) > 0, "score" %in% names(df), "pmid" %in% names(df))
+      agg <- aggregate(score ~ trait + pmid + clock, data=df, FUN=sum)
+      agg$trait_pmid <- paste0(agg$trait, " [", agg$pmid, "]")
+      score_lim <- input$score_filter %||% 15
+      agg <- agg[agg$score >= -score_lim & agg$score <= score_lim, ]
+      if (nrow(agg) == 0) { cairo_pdf(file); dev.off(); return() }
+      cc  <- custom_clocks()
+      cet <- custom_ewas_traits()
+      ordered_tp <- c(); spacing <- 2; current_y <- 0; trait_y <- c()
+      for (grp in names(TRAIT_GROUPS)) {
+        grp_tp <- intersect(TRAIT_GROUPS[[grp]], unique(agg$trait))
+        if (length(grp_tp) == 0) next
+        for (tr in rev(sort(grp_tp))) {
+          tp_vals <- sort(unique(agg$trait_pmid[agg$trait == tr]))
+          for (tp in rev(tp_vals)) { current_y <- current_y + spacing; trait_y[tp] <- current_y }
+          ordered_tp <- c(ordered_tp, rev(tp_vals))
+        }
+        current_y <- current_y + spacing
+      }
+      total_y      <- current_y
+      traits_label <- ifelse(nchar(ordered_tp) > 55, paste0(substr(ordered_tp,1,52),"..."), ordered_tp)
+      names(traits_label) <- ordered_tp
+      all_colors   <- if (length(cc) > 0) c(CLOCK_COLORS, setNames(rep("#888888",length(cc)),names(cc))) else CLOCK_COLORS
+      agg$y        <- trait_y[agg$trait_pmid]
+      agg$point_col <- all_colors[agg$clock]
+      x_range      <- range(agg$score, na.rm=TRUE)
+      x_lim        <- c(x_range[1]-diff(x_range)*0.05, x_range[2]+diff(x_range)*0.05)
+      trait_chars  <- max(nchar(traits_label))
+      trait_margin <- max(6, ceiling(trait_chars * 0.38))
+      grp_line     <- trait_margin + 2
+      n_tp         <- length(ordered_tp)
+      cairo_pdf(file, width=max(12, trait_margin*0.3+14), height=max(8, n_tp*0.22+3))
+      par(mar=c(5, 4, 4, grp_line + 10), bg="white")
+      plot(NA, xlim=x_lim, ylim=c(0, total_y+spacing), xlab="", ylab="", axes=FALSE)
+      rect(par("usr")[1], par("usr")[3], par("usr")[2], par("usr")[4], col="white", border=NA)
+      grp_counter <- 0; current_y <- 0
+      for (grp in names(TRAIT_GROUPS)) {
+        grp_traits <- intersect(TRAIT_GROUPS[[grp]], unique(agg$trait))
+        if (length(grp_traits) == 0) next
+        grp_counter <- grp_counter + 1
+        grp_start   <- current_y
+        grp_end     <- current_y + length(unique(agg$trait_pmid[agg$trait %in% grp_traits]))*spacing + spacing
+        rect(par("usr")[1], grp_start, par("usr")[2], grp_end,
+             col=if (grp_counter%%2==0) "#E8EEF4" else "#FFFFFF", border=NA)
+        mtext(grp, side=4, at=(grp_start+grp_end)/2, las=2, cex=0.65, font=2,
+              col="#444444", line=grp_line, xpd=TRUE)
+        current_y <- grp_end
+      }
+      abline(h=trait_y, col="#DDDDDD", lwd=0.8)
+      abline(v=0, col="black", lwd=0.8)
+      points(agg$score, agg$y, col=agg$point_col, pch=16, cex=1.2)
+      axis(1, at=pretty(x_lim,n=10), cex.axis=1.0, padj=0.3)
+      axis(4, at=trait_y[ordered_tp], labels=rep("", length(ordered_tp)), tick=FALSE)
+      for (ti in seq_along(ordered_tp)) {
+        is_ce <- ordered_tp[ti] %in% cet
+        mtext(traits_label[ordered_tp[ti]], side=4, at=trait_y[ordered_tp[ti]], las=2,
+              cex=0.75, adj=0, font=if (is_ce) 2 else 1,
+              col=if (is_ce) "#C05000" else "black", line=0.3)
+      }
+      box(col="gray60")
+      mtext("Amžiaus skirtumas metais", side=1, line=3, cex=1.1)
+      mtext("Veiksnių įtaka epigenetiniams laikrodžiams", side=3, line=1, font=2, cex=1.2, adj=0.5)
+      all_labels <- if (length(cc) > 0) c(CLOCK_LABELS, setNames(gsub("_"," ",tools::toTitleCase(names(cc))),names(cc))) else CLOCK_LABELS
+      selected_clocks <- intersect(unique(agg$clock), names(all_colors))
+      legend("topright", inset=c(-grp_line/par("pin")[1]*0.6, 0), xpd=TRUE,
+             legend=all_labels[selected_clocks],
+             col=all_colors[selected_clocks], pch=16, pt.cex=1.2, cex=0.7, bty="n",
+             y.intersp=1.1, title="Laikrodis", title.font=2)
+      dev.off()
+    }
   )
   
   # DOWNLOAD: DOT PLOT
@@ -919,7 +1172,7 @@ server <- function(input, output, session) {
       axis(2, at=seq_len(n_traits)*spacing, labels=traits_label, las=2, cex.axis=0.85, tick=FALSE, hadj=1)
       box(col="gray60")
       mtext("Amžiaus skirtumas metais", side=1, line=3, cex=1.1)
-      mtext("Veiksnių įtaka epigenetiniams laikrodžiams", side=3, line=1, font=2, cex=1.2)
+      mtext("Veiksnių įtaka epigenetiniams laikrodžiams", side=3, line=1, font=2, cex=1.2, adj=0.7)
       all_labels <- if (length(cc) > 0) c(CLOCK_LABELS, setNames(gsub("_"," ",tools::toTitleCase(names(cc))),names(cc))) else CLOCK_LABELS
       selected_clocks <- intersect(unique(agg$clock), names(all_colors))
       legend("topright", inset=c(-14/par("pin")[1], 0), xpd=TRUE,
@@ -945,9 +1198,9 @@ server <- function(input, output, session) {
       }
       if (nrow(df) == 0) { cairo_pdf(file); dev.off(); return() }
       title <- if (is.null(cat)) "Visi" else cat
-      h <- make_heatmap(df, title, "#F7F7F7")
+      h <- make_heatmap(df, title, "#F7F7F7", names(custom_clocks()), selected_clock_ids(), custom_ewas_traits())
       if (is.null(h)) { cairo_pdf(file); dev.off(); return() }
-      heatmap_save(h, title, file)
+      heatmap_save(h, title, file, names(custom_clocks()))
     }
   )
 }
