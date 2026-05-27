@@ -50,7 +50,7 @@ install.packages(c("shiny", "DT", "pheatmap", "openxlsx", "ape"))
 Projekto struktūra turi atitikti šį išdėstymą:
  
 ```
-projektas/
+AevumFlow/
 ├── app/
 │   ├── server.R
 │   ├── ui.R
